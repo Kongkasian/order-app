@@ -1,5 +1,19 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import './App.css'
+
+// 유틸리티 함수들을 컴포넌트 외부로 이동
+const formatPrice = (price) => {
+  return price.toLocaleString() + '원'
+}
+
+const formatDate = (date) => {
+  const d = new Date(date)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  const hours = d.getHours().toString().padStart(2, '0')
+  const minutes = d.getMinutes().toString().padStart(2, '0')
+  return `${month}월 ${day}일 ${hours}:${minutes}`
+}
 
 function App() {
   // 화면 전환 상태
@@ -113,8 +127,9 @@ function App() {
     const totalPrice = menu.price + optionPrice
     const optionNames = selectedOptionsData.map(opt => opt.name).join(', ')
 
-    // 동일한 메뉴와 옵션 조합 찾기
-    const cartItemKey = `${menu.id}-${menuOptions.sort().join(',')}`
+    // 동일한 메뉴와 옵션 조합 찾기 (원본 배열 변경 방지)
+    const sortedOptions = [...menuOptions].sort()
+    const cartItemKey = `${menu.id}-${sortedOptions.join(',')}`
     const existingItem = cart.find(item => item.key === cartItemKey)
 
     if (existingItem) {
@@ -192,28 +207,13 @@ function App() {
     ))
   }
 
-  // 대시보드 통계 계산 (관리자 화면)
-  const dashboardStats = {
+  // 대시보드 통계 계산 (관리자 화면) - useMemo로 최적화
+  const dashboardStats = useMemo(() => ({
     total: orders.length,
     received: orders.filter(o => o.status === 'received').length,
     manufacturing: orders.filter(o => o.status === 'manufacturing').length,
     completed: orders.filter(o => o.status === 'completed').length
-  }
-
-  // 숫자를 원화 형식으로 변환
-  const formatPrice = (price) => {
-    return price.toLocaleString() + '원'
-  }
-
-  // 날짜 포맷 (관리자 화면)
-  const formatDate = (date) => {
-    const d = new Date(date)
-    const month = d.getMonth() + 1
-    const day = d.getDate()
-    const hours = d.getHours().toString().padStart(2, '0')
-    const minutes = d.getMinutes().toString().padStart(2, '0')
-    return `${month}월 ${day}일 ${hours}:${minutes}`
-  }
+  }), [orders])
 
   // 주문 화면 컴포넌트
   const OrderView = () => (
