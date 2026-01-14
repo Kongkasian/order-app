@@ -1,5 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import './App.css'
+
+// API 기본 URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 // 유틸리티 함수들을 컴포넌트 외부로 이동
 const formatPrice = (price) => {
@@ -20,74 +23,8 @@ function App() {
   const [currentView, setCurrentView] = useState('order') // 'order' or 'admin'
 
   // 메뉴 데이터
-  const [menus] = useState([
-    {
-      id: 1,
-      name: '아메리카노(ICE)',
-      price: 4000,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1559056199-641aac8b55e?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    },
-    {
-      id: 2,
-      name: '아메리카노(HOT)',
-      price: 4000,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    },
-    {
-      id: 3,
-      name: '카페라떼',
-      price: 5000,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1461023058943-07fcbe16d735?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    },
-    {
-      id: 4,
-      name: '카푸치노',
-      price: 5000,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    },
-    {
-      id: 5,
-      name: '바닐라라떼',
-      price: 5500,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    },
-    {
-      id: 6,
-      name: '에스프레소',
-      price: 3000,
-      description: '간단한 설명...',
-      image: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=400&h=300&fit=crop',
-      options: [
-        { id: 'shot', name: '샷 추가', price: 500 },
-        { id: 'syrup', name: '시럽 추가', price: 0 }
-      ]
-    }
-  ])
+  const [menus, setMenus] = useState([])
+  const [menusLoading, setMenusLoading] = useState(true)
 
   // 각 메뉴별 선택된 옵션 관리 (주문 화면)
   const [selectedOptions, setSelectedOptions] = useState({})
@@ -97,13 +34,118 @@ function App() {
 
   // 주문 목록 (관리자 화면 - 모든 주문)
   const [orders, setOrders] = useState([])
+  const [ordersLoading, setOrdersLoading] = useState(false)
 
-  // 재고 현황 (관리자 화면 - 메뉴 3개만)
-  const [stock, setStock] = useState({
-    1: 10, // 아메리카노(ICE)
-    2: 10, // 아메리카노(HOT)
-    3: 10  // 카페라떼
+  // 재고 현황 (관리자 화면)
+  const [stock, setStock] = useState({})
+
+  // 대시보드 통계
+  const [dashboardStats, setDashboardStats] = useState({
+    total: 0,
+    received: 0,
+    manufacturing: 0,
+    completed: 0
   })
+  const [statsLoading, setStatsLoading] = useState(false)
+
+  // 메뉴 데이터 로드
+  useEffect(() => {
+    const fetchMenus = async () => {
+      try {
+        setMenusLoading(true)
+        const response = await fetch(`${API_BASE_URL}/api/menus`)
+        const result = await response.json()
+        
+        if (result.success) {
+          setMenus(result.data)
+        } else {
+          console.error('메뉴 로드 실패:', result.error)
+          alert('메뉴를 불러올 수 없습니다.')
+        }
+      } catch (error) {
+        console.error('메뉴 로드 오류:', error)
+        alert('메뉴를 불러오는 중 오류가 발생했습니다.')
+      } finally {
+        setMenusLoading(false)
+      }
+    }
+    
+    fetchMenus()
+  }, [])
+
+  // 관리자 화면 진입 시 데이터 로드
+  useEffect(() => {
+    if (currentView === 'admin') {
+      fetchOrders()
+      fetchDashboardStats()
+      fetchStockData()
+    }
+  }, [currentView, menus])
+
+  // 재고 데이터 로드
+  const fetchStockData = async () => {
+    try {
+      const stockPromises = menus.map(menu => 
+        fetch(`${API_BASE_URL}/api/menus/${menu.id}/stock`)
+          .then(res => res.json())
+          .then(result => result.success ? { menuId: result.data.menuId, stock: result.data.stock } : null)
+      )
+      const stockResults = await Promise.all(stockPromises)
+      const stockMap = {}
+      stockResults.forEach(result => {
+        if (result) {
+          stockMap[result.menuId] = result.stock
+        }
+      })
+      setStock(stockMap)
+    } catch (error) {
+      console.error('재고 로드 오류:', error)
+    }
+  }
+
+  // 주문 목록 로드
+  const fetchOrders = async () => {
+    try {
+      setOrdersLoading(true)
+      const response = await fetch(`${API_BASE_URL}/api/orders`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setOrders(result.data.map(order => ({
+          id: order.id,
+          date: order.orderDate,
+          status: order.status,
+          items: order.items,
+          totalAmount: order.totalAmount
+        })))
+      } else {
+        console.error('주문 로드 실패:', result.error)
+      }
+    } catch (error) {
+      console.error('주문 로드 오류:', error)
+    } finally {
+      setOrdersLoading(false)
+    }
+  }
+
+  // 대시보드 통계 로드
+  const fetchDashboardStats = async () => {
+    try {
+      setStatsLoading(true)
+      const response = await fetch(`${API_BASE_URL}/api/dashboard/stats`)
+      const result = await response.json()
+      
+      if (result.success) {
+        setDashboardStats(result.data)
+      } else {
+        console.error('통계 로드 실패:', result.error)
+      }
+    } catch (error) {
+      console.error('통계 로드 오류:', error)
+    } finally {
+      setStatsLoading(false)
+    }
+  }
 
   // 옵션 선택/해제 (주문 화면)
   const toggleOption = (menuId, optionId) => {
@@ -157,40 +199,98 @@ function App() {
   const totalAmount = cart.reduce((sum, item) => sum + item.totalPrice, 0)
 
   // 주문하기 (주문 화면)
-  const handleOrder = () => {
+  const handleOrder = async () => {
     if (cart.length === 0) {
       alert('장바구니가 비어있습니다.')
       return
     }
 
-    // 주문 생성
-    const newOrder = {
-      id: Date.now(),
-      date: new Date(),
-      status: 'received', // 'received', 'manufacturing', 'completed'
-      items: cart.map(item => ({
-        menuId: item.menuId,
-        menuName: item.menuName,
-        optionNames: item.optionNames,
-        quantity: item.quantity,
-        price: item.price,
-        totalPrice: item.totalPrice
-      })),
-      totalAmount
-    }
+    try {
+      // 주문 항목 준비 (PRD에 맞는 형식으로 변환)
+      const items = cart.map(item => {
+        const optionNamesArray = item.optionNames ? item.optionNames.split(', ') : []
+        
+        // item.price는 개당 가격 (메뉴 가격 + 옵션 가격)
+        // 메뉴 정보에서 기본 가격 찾기
+        const menu = menus.find(m => m.id === item.menuId)
+        const menuBasePrice = menu ? menu.price : 0
+        
+        // 옵션 가격 계산 (개당 옵션 가격)
+        const optionPrice = item.price - menuBasePrice
+        
+        return {
+          menuId: item.menuId,
+          menuName: item.menuName,
+          quantity: item.quantity,
+          options: optionNamesArray,
+          price: menuBasePrice, // 메뉴 기본 가격
+          optionPrice: optionPrice, // 개당 옵션 가격
+          totalPrice: item.totalPrice // 총 가격
+        }
+      })
 
-    setOrders([newOrder, ...orders])
-    setCart([])
-    setSelectedOptions({})
-    alert(`주문이 완료되었습니다!\n총 금액: ${totalAmount.toLocaleString()}원`)
+      const response = await fetch(`${API_BASE_URL}/api/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          items,
+          totalAmount
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setCart([])
+        setSelectedOptions({})
+        alert(`주문이 완료되었습니다!\n총 금액: ${totalAmount.toLocaleString()}원`)
+        
+        // 관리자 화면이면 주문 목록 새로고침
+        if (currentView === 'admin') {
+          fetchOrders()
+          fetchDashboardStats()
+        }
+      } else {
+        alert(result.error || '주문 처리 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('주문 생성 오류:', error)
+      alert('주문 처리 중 오류가 발생했습니다.')
+    }
   }
 
   // 재고 조절 (관리자 화면)
-  const adjustStock = (menuId, delta) => {
-    setStock(prev => ({
-      ...prev,
-      [menuId]: Math.max(0, (prev[menuId] || 0) + delta)
-    }))
+  const adjustStock = async (menuId, delta) => {
+    const currentStock = stock[menuId] || 0
+    const newStock = Math.max(0, currentStock + delta)
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/menus/${menuId}/stock`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          stock: newStock
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setStock(prev => ({
+          ...prev,
+          [menuId]: result.data.stock
+        }))
+      } else {
+        alert(result.error || '재고 수정 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('재고 수정 오류:', error)
+      alert('재고 수정 중 오류가 발생했습니다.')
+    }
   }
 
   // 재고 상태 확인 (관리자 화면)
@@ -201,26 +301,45 @@ function App() {
   }
 
   // 주문 상태 변경 (관리자 화면)
-  const changeOrderStatus = (orderId, newStatus) => {
-    setOrders(prev => prev.map(order =>
-      order.id === orderId ? { ...order, status: newStatus } : order
-    ))
-  }
+  const changeOrderStatus = async (orderId, newStatus) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/orders/${orderId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      })
 
-  // 대시보드 통계 계산 (관리자 화면) - useMemo로 최적화
-  const dashboardStats = useMemo(() => ({
-    total: orders.length,
-    received: orders.filter(o => o.status === 'received').length,
-    manufacturing: orders.filter(o => o.status === 'manufacturing').length,
-    completed: orders.filter(o => o.status === 'completed').length
-  }), [orders])
+      const result = await response.json()
+
+      if (result.success) {
+        // 주문 목록 업데이트
+        setOrders(prev => prev.map(order =>
+          order.id === orderId ? { ...order, status: newStatus } : order
+        ))
+        // 대시보드 통계 새로고침
+        fetchDashboardStats()
+      } else {
+        alert(result.error || '주문 상태 변경 중 오류가 발생했습니다.')
+      }
+    } catch (error) {
+      console.error('주문 상태 변경 오류:', error)
+      alert('주문 상태 변경 중 오류가 발생했습니다.')
+    }
+  }
 
   // 주문 화면 컴포넌트
   const OrderView = () => (
     <>
       <main className="menu-area">
-        <div className="menu-grid">
-          {menus.map(menu => (
+        {menusLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center' }}>메뉴를 불러오는 중...</div>
+        ) : (
+          <div className="menu-grid">
+            {menus.map(menu => (
             <div key={menu.id} className="menu-card">
               <div className="menu-image">
                 <img src={menu.image} alt={menu.name} />
@@ -253,8 +372,9 @@ function App() {
                 </button>
               </div>
             </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <aside className="cart-area">
@@ -269,7 +389,7 @@ function App() {
                   <li key={item.key} className="cart-item">
                     <span className="cart-item-name">
                       {item.menuName}
-                      {item.optionNames && ` (${item.optionNames})`} X {item.quantity}
+                      {item.optionNames && ` (${item.optionNames})`}
                     </span>
                     <span className="cart-item-price">
                       {formatPrice(item.totalPrice)}
@@ -323,14 +443,13 @@ function App() {
       <section className="stock-section">
         <h2 className="section-title">재고 현황</h2>
         <div className="stock-list">
-          {[1, 2, 3].map(menuId => {
-            const menu = menus.find(m => m.id === menuId)
-            const quantity = stock[menuId] || 0
+          {menus.map(menu => {
+            const quantity = stock[menu.id] ?? 0
             const status = getStockStatus(quantity)
             return (
-              <div key={menuId} className="stock-item">
+              <div key={menu.id} className="stock-item">
                 <div className="stock-info">
-                  <div className="stock-name">{menu?.name}</div>
+                  <div className="stock-name">{menu.name}</div>
                   <div className="stock-quantity">
                     <span className="stock-count">{quantity}개</span>
                     <span className={`stock-status ${status === '품절' ? 'out' : status === '주의' ? 'warning' : 'normal'}`}>
@@ -341,13 +460,13 @@ function App() {
                 <div className="stock-controls">
                   <button
                     className="stock-btn"
-                    onClick={() => adjustStock(menuId, -1)}
+                    onClick={() => adjustStock(menu.id, -1)}
                   >
                     -
                   </button>
                   <button
                     className="stock-btn"
-                    onClick={() => adjustStock(menuId, 1)}
+                    onClick={() => adjustStock(menu.id, 1)}
                   >
                     +
                   </button>
@@ -362,7 +481,9 @@ function App() {
       <section className="orders-section">
         <h2 className="section-title">주문 현황</h2>
         <div className="orders-list">
-          {orders.length === 0 ? (
+          {ordersLoading ? (
+            <div className="orders-empty">주문 목록을 불러오는 중...</div>
+          ) : orders.length === 0 ? (
             <div className="orders-empty">주문이 없습니다.</div>
           ) : (
             orders.map(order => (
@@ -373,7 +494,7 @@ function App() {
                     {order.items.map((item, idx) => (
                       <div key={idx} className="order-item-detail">
                         {item.menuName}
-                        {item.optionNames && ` (${item.optionNames})`} x {item.quantity}
+                        {item.options && item.options.length > 0 && ` (${item.options.join(', ')})`} x {item.quantity}
                       </div>
                     ))}
                   </div>
