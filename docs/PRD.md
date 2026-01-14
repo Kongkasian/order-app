@@ -209,3 +209,357 @@
 - 각 섹션에 적절한 제목 표시
 - 충분한 여백과 간격으로 가독성 확보
 - 재고 조절 버튼과 액션 버튼은 명확하게 표시
+
+## 5. 백엔드 개발 요구사항
+
+### 5.1 데이터 모델
+
+#### 5.1.1 Menus (메뉴)
+커피 메뉴 정보를 저장하는 테이블입니다.
+
+**필드:**
+- `id` (INTEGER, PRIMARY KEY, AUTO_INCREMENT): 메뉴 고유 ID
+- `name` (VARCHAR): 커피 이름 (예: "아메리카노(ICE)", "카페라떼")
+- `description` (TEXT): 메뉴 설명
+- `price` (INTEGER): 메뉴 기본 가격 (원 단위)
+- `image` (VARCHAR): 이미지 URL 또는 경로
+- `stock` (INTEGER): 재고 수량 (기본값: 0)
+
+**제약 조건:**
+- `name`, `price`는 필수 (NOT NULL)
+- `price`는 0 이상의 정수
+- `stock`은 0 이상의 정수
+
+#### 5.1.2 Options (옵션)
+메뉴 옵션 정보를 저장하는 테이블입니다.
+
+**필드:**
+- `id` (INTEGER, PRIMARY KEY, AUTO_INCREMENT): 옵션 고유 ID
+- `name` (VARCHAR): 옵션 이름 (예: "샷 추가", "시럽 추가")
+- `price` (INTEGER): 옵션 추가 가격 (원 단위, 0 이상)
+- `menu_id` (INTEGER, FOREIGN KEY): 연결된 메뉴 ID (Menus 테이블 참조)
+
+**제약 조건:**
+- `name`, `price`, `menu_id`는 필수 (NOT NULL)
+- `price`는 0 이상의 정수
+- `menu_id`는 Menus 테이블의 id와 외래키 관계
+
+#### 5.1.3 Orders (주문)
+주문 정보를 저장하는 테이블입니다.
+
+**필드:**
+- `id` (INTEGER, PRIMARY KEY, AUTO_INCREMENT): 주문 고유 ID
+- `order_date` (TIMESTAMP): 주문 일시 (기본값: 현재 시간)
+- `status` (VARCHAR): 주문 상태 (기본값: 'received')
+  - 'received': 주문 접수
+  - 'manufacturing': 제조 중
+  - 'completed': 제조 완료
+- `total_amount` (INTEGER): 주문 총 금액 (원 단위)
+- `items` (JSON 또는 TEXT): 주문 내용 (메뉴, 수량, 옵션, 금액)
+  - JSON 형식 예시:
+    ```json
+    [
+      {
+        "menuId": 1,
+        "menuName": "아메리카노(ICE)",
+        "quantity": 1,
+        "options": ["샷 추가"],
+        "price": 4000,
+        "optionPrice": 500,
+        "totalPrice": 4500
+      }
+    ]
+    ```
+
+**제약 조건:**
+- `order_date`, `status`, `total_amount`, `items`는 필수 (NOT NULL)
+- `total_amount`는 0 이상의 정수
+- `status`는 'received', 'manufacturing', 'completed' 중 하나
+
+### 5.2 데이터 스키마를 위한 사용자 흐름
+
+#### 5.2.1 메뉴 조회 흐름
+① **Menus 테이블 조회**
+- 주문하기 화면 진입 시 Menus 테이블에서 모든 메뉴 정보를 조회
+- 메뉴 정보: id, name, description, price, image
+- 재고 수량(stock)은 관리자 화면에서만 조회 및 표시
+
+② **옵션 정보 조회**
+- 각 메뉴에 연결된 Options 테이블의 옵션 정보를 함께 조회
+- 옵션 정보: id, name, price
+
+③ **프런트엔드 표시**
+- 조회한 메뉴 정보를 브라우저 화면에 카드 형태로 표시
+- 각 메뉴 카드에 옵션 선택 체크박스 표시
+
+#### 5.2.2 주문 생성 흐름
+① **장바구니 정보 수집**
+- 사용자가 선택한 메뉴, 수량, 옵션 정보를 프런트엔드에서 수집
+
+② **주문 정보 생성**
+- 주문 시간: 현재 시간 (TIMESTAMP)
+- 주문 상태: 'received' (주문 접수)
+- 주문 내용(items): 메뉴 ID, 메뉴명, 수량, 선택한 옵션, 가격 정보를 JSON 형식으로 저장
+- 총 금액(total_amount): 모든 주문 항목의 총합 계산
+
+③ **Orders 테이블에 저장**
+- 생성한 주문 정보를 Orders 테이블에 INSERT
+
+④ **재고 차감 (선택사항)**
+- 주문이 완료되면 해당 메뉴의 재고(stock)를 주문 수량만큼 차감
+- 재고가 부족한 경우 에러 처리 필요
+
+#### 5.2.3 관리자 주문 관리 흐름
+① **주문 목록 조회**
+- Orders 테이블에서 모든 주문 정보를 조회
+- 주문 상태별로 필터링 가능
+- 최신 주문순으로 정렬 (order_date DESC)
+
+② **주문 상태 변경**
+- 관리자가 '제조 시작' 버튼 클릭 시
+  - 해당 주문의 status를 'received' → 'manufacturing'으로 UPDATE
+- 관리자가 '제조 완료' 버튼 클릭 시
+  - 해당 주문의 status를 'manufacturing' → 'completed'로 UPDATE
+
+③ **대시보드 통계 조회**
+- Orders 테이블에서 상태별 주문 개수 집계
+  - 총 주문: 전체 주문 개수
+  - 주문 접수: status = 'received' 개수
+  - 제조 중: status = 'manufacturing' 개수
+  - 제조 완료: status = 'completed' 개수
+
+#### 5.2.4 재고 관리 흐름
+① **재고 조회**
+- Menus 테이블에서 재고 수량(stock) 조회
+- 관리자 화면의 '재고 현황' 섹션에 표시
+
+② **재고 수정**
+- 관리자가 +/- 버튼으로 재고 수량 조절
+- Menus 테이블의 해당 메뉴의 stock 값을 UPDATE
+
+### 5.3 API 설계
+
+#### 5.3.1 메뉴 관련 API
+
+**GET /api/menus**
+- **설명**: 모든 커피 메뉴 목록 조회
+- **요청**: 없음
+- **응답**: 
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": 1,
+        "name": "아메리카노(ICE)",
+        "description": "간단한 설명...",
+        "price": 4000,
+        "image": "https://...",
+        "options": [
+          {
+            "id": 1,
+            "name": "샷 추가",
+            "price": 500
+          },
+          {
+            "id": 2,
+            "name": "시럽 추가",
+            "price": 0
+          }
+        ]
+      }
+    ]
+  }
+  ```
+- **에러 응답**:
+  ```json
+  {
+    "success": false,
+    "error": "메뉴 목록을 불러올 수 없습니다."
+  }
+  ```
+
+**GET /api/menus/:id/stock**
+- **설명**: 특정 메뉴의 재고 수량 조회 (관리자용)
+- **요청 파라미터**: `id` (메뉴 ID)
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "menuId": 1,
+      "stock": 10
+    }
+  }
+  ```
+
+**PUT /api/menus/:id/stock**
+- **설명**: 특정 메뉴의 재고 수량 수정 (관리자용)
+- **요청 파라미터**: `id` (메뉴 ID)
+- **요청 body**:
+  ```json
+  {
+    "stock": 15
+  }
+  ```
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "menuId": 1,
+      "stock": 15
+    }
+  }
+  ```
+
+#### 5.3.2 주문 관련 API
+
+**POST /api/orders**
+- **설명**: 새로운 주문 생성
+- **요청 body**:
+  ```json
+  {
+    "items": [
+      {
+        "menuId": 1,
+        "menuName": "아메리카노(ICE)",
+        "quantity": 1,
+        "options": ["샷 추가"],
+        "price": 4000,
+        "optionPrice": 500,
+        "totalPrice": 4500
+      }
+    ],
+    "totalAmount": 4500
+  }
+  ```
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "orderId": 1,
+      "orderDate": "2024-01-15T10:30:00Z",
+      "status": "received",
+      "totalAmount": 4500
+    }
+  }
+  ```
+- **에러 응답**:
+  ```json
+  {
+    "success": false,
+    "error": "주문 처리 중 오류가 발생했습니다."
+  }
+  ```
+- **참고**: 주문 생성 시 해당 메뉴의 재고도 함께 차감 처리
+
+**GET /api/orders**
+- **설명**: 모든 주문 목록 조회 (관리자용)
+- **쿼리 파라미터** (선택사항):
+  - `status`: 주문 상태로 필터링 ('received', 'manufacturing', 'completed')
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": [
+      {
+        "id": 1,
+        "orderDate": "2024-01-15T10:30:00Z",
+        "status": "received",
+        "items": [...],
+        "totalAmount": 4500
+      }
+    ]
+  }
+  ```
+- **정렬**: orderDate 기준 내림차순 (최신순)
+
+**GET /api/orders/:id**
+- **설명**: 특정 주문 정보 조회
+- **요청 파라미터**: `id` (주문 ID)
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "id": 1,
+      "orderDate": "2024-01-15T10:30:00Z",
+      "status": "received",
+      "items": [...],
+      "totalAmount": 4500
+    }
+  }
+  ```
+- **에러 응답**:
+  ```json
+  {
+    "success": false,
+    "error": "주문을 찾을 수 없습니다."
+  }
+  ```
+
+**PATCH /api/orders/:id/status**
+- **설명**: 주문 상태 변경 (관리자용)
+- **요청 파라미터**: `id` (주문 ID)
+- **요청 body**:
+  ```json
+  {
+    "status": "manufacturing"
+  }
+  ```
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "id": 1,
+      "status": "manufacturing"
+    }
+  }
+  ```
+- **상태 변경 규칙**:
+  - 'received' → 'manufacturing' (제조 시작)
+  - 'manufacturing' → 'completed' (제조 완료)
+
+#### 5.3.3 대시보드 관련 API
+
+**GET /api/dashboard/stats**
+- **설명**: 관리자 대시보드 통계 정보 조회
+- **요청**: 없음
+- **응답**:
+  ```json
+  {
+    "success": true,
+    "data": {
+      "total": 10,
+      "received": 3,
+      "manufacturing": 5,
+      "completed": 2
+    }
+  }
+  ```
+
+#### 5.3.4 API 공통 사항
+
+**응답 형식:**
+- 모든 API는 JSON 형식으로 응답
+- 성공 시: `{ "success": true, "data": ... }`
+- 실패 시: `{ "success": false, "error": "에러 메시지" }`
+
+**HTTP 상태 코드:**
+- 200: 성공
+- 400: 잘못된 요청 (Bad Request)
+- 404: 리소스를 찾을 수 없음 (Not Found)
+- 500: 서버 내부 오류 (Internal Server Error)
+
+**CORS 설정:**
+- 프런트엔드와 백엔드가 분리되어 있으므로 CORS 설정 필요
+- 개발 환경에서는 모든 origin 허용 가능
+
+**에러 처리:**
+- 데이터베이스 연결 오류
+- 잘못된 데이터 형식
+- 존재하지 않는 리소스 접근
+- 재고 부족 등의 비즈니스 로직 오류

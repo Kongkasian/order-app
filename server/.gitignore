@@ -1,0 +1,23 @@
+# ?˜ì¡´??
+node_modules/
+
+# ?˜ê²½ ë³€??
+.env
+
+# ë¡œê·¸ ?Œì¼
+*.log
+npm-debug.log*
+
+# ?´ì˜ì²´ì œ ?Œì¼
+.DS_Store
+Thumbs.db
+
+# IDE ?¤ì •
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ê¸°í?
+dist/
+build/
