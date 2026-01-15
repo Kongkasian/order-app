@@ -70,6 +70,7 @@ git push origin main
 1. Render 대시보드에서 "New +" → "Web Service" 선택
 2. GitHub 저장소 연결
 3. 설정 입력:
+   - **Project (Optional)**: `No` 또는 `None` (단일 서비스인 경우) / 또는 새 프로젝트 생성
    - **Name**: `order-app-api` (원하는 이름)
    - **Environment**: `Node`
    - **Region**: 데이터베이스와 같은 지역

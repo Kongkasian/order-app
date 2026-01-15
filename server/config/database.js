@@ -11,7 +11,11 @@ export const pool = new Pool({
   password: config.database.password,
   max: 20, // 최대 연결 수
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
+  // Render PostgreSQL은 SSL 연결 필수
+  ssl: {
+    rejectUnauthorized: false
+  }
 })
 
 // 연결 테스트

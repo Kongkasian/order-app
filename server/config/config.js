@@ -10,13 +10,13 @@ export const config = {
     env: process.env.NODE_ENV || 'development'
   },
 
-  // 데이터베이스 설정 (추후 추가)
+  // 데이터베이스 설정
   database: {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    name: process.env.DB_NAME || 'order_app',
-    user: process.env.DB_USER || '',
-    password: process.env.DB_PASSWORD || ''
+    host: (process.env.DB_HOST || 'localhost').replace(/['"]/g, ''), // 따옴표 제거
+    port: parseInt(process.env.DB_PORT || '5432'),
+    name: (process.env.DB_NAME || 'order_app').replace(/['"]/g, ''), // 따옴표 제거
+    user: (process.env.DB_USER || '').replace(/['"]/g, ''), // 따옴표 제거
+    password: (process.env.DB_PASSWORD || '').replace(/['"]/g, '') // 따옴표 제거
   },
 
   // CORS 설정
