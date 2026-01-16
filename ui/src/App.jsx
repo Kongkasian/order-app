@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import './App.css'
-
-// API 기본 URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+import { API_BASE_URL } from './config/env.js'
 
 // 유틸리티 함수들을 컴포넌트 외부로 이동
 const formatPrice = (price) => {
@@ -403,12 +401,12 @@ function App() {
             <div className="cart-total">
               <span>총 금액</span>
               <strong>{formatPrice(totalAmount)}</strong>
-            </div>
+      </div>
             <button className="order-btn" onClick={handleOrder}>
               주문하기
-            </button>
+        </button>
           </div>
-        </div>
+      </div>
       </aside>
     </>
   )
